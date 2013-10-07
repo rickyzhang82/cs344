@@ -24,3 +24,6 @@ bin/*
 
 #build folder
 build/*
+
+#nishgt-build folder
+nsight-build/*
