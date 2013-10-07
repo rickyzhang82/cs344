@@ -18,3 +18,9 @@
 
 # OS X stuff
 .DS_Store
+
+#bin folder
+bin/*
+
+#build folder
+build/*
