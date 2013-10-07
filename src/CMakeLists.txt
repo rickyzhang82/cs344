@@ -13,7 +13,10 @@ find_package(CUDA REQUIRED)
 
 link_libraries(${OpenCV_LIBS} )
 
-set (EXECUTABLE_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/bin/")
+#set (EXECUTABLE_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/bin/")
+get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR} PATH)
+
+set (EXECUTABLE_OUTPUT_PATH "${PARENT_DIR}/bin/")
 
 if(CUDA_FOUND)
     # compared to class settings, we let NVidia's FindCUDA CMake detect 
