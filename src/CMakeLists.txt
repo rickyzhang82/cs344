@@ -24,15 +24,14 @@ if(CUDA_FOUND)
     # to make sure more people can easily run class code without knowing 
     # about this compiler argument
     set(CUDA_NVCC_FLAGS "
-			    -gencode;arch=compute_20,code=sm_20; 
-			    -gencode;arch=compute_11,code=sm_11; 
-			    -gencode;arch=compute_12,code=sm_12;
-			    -gencode;arch=compute_13,code=sm_13;")
+			    -gencode;arch=compute_20,code=sm_20;")
 
     # add -Wextra compiler flag for gcc compilations
     if (UNIX)
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wall;")
-	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")
+	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")	
+	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -g")
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-G")
     endif (UNIX)
 
     # add debugging to CUDA NVCC flags.  For NVidia's NSight tools.
