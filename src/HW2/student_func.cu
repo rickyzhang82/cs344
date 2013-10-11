@@ -149,7 +149,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
 					image_y + r >= numRows ||
 						image_x + c < 0 ||
 							image_x + c >= numCols)
-				patch_pixel = 0;
+				patch_pixel = *(inputChannel+ image_y * numCols + image_x);
 			else
 				patch_pixel = *(inputChannel + (image_y + r) * numCols + image_x + c);
 
