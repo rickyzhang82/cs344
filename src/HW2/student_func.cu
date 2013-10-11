@@ -141,10 +141,19 @@ void gaussian_blur(const unsigned char* const inputChannel,
 	//assume filter is a square matrix
 
 	float result = 0;
+	unsigned char patch_pixel;
 
 	for (int r = -filterWidth / 2; r <= filterWidth / 2; ++r) {
 		for (int c = -filterWidth / 2; c <= filterWidth / 2; ++c) {
-		result = result + (*(filter+ (r + filterWidth/2) * filterWidth + c + filterWidth/2));
+			if(image_y + r < 0 ||
+					image_y + r >= numRows ||
+						image_x + c < 0 ||
+							image_x + c >= numCols)
+				patch_pixel = 0;
+			else
+				patch_pixel = *(inputChannel + (image_y + r) * numCols + image_x + c);
+
+			result  = result +  patch_pixel * (*(filter+ (r + filterWidth/2) * filterWidth + c + filterWidth/2));
 		}
 	}
 
