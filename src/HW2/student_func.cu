@@ -102,13 +102,15 @@
 
 #include "utils.h"
 
+const int TB_DIM_X = 64;
+const int TB_DIM_Y = 64;
+
 __global__
 void gaussian_blur(const unsigned char* const inputChannel,
                    unsigned char* const outputChannel,
                    int numRows, int numCols,
                    const float* const filter, const int filterWidth)
 {
-  // TODO
   
   // NOTE: Be sure to compute any intermediate results in floating point
   // before storing the final result as unsigned char.
@@ -129,6 +131,100 @@ void gaussian_blur(const unsigned char* const inputChannel,
   // the value is out of bounds), you should explicitly clamp the neighbor values you read
   // to be within the bounds of the image. If this is not clear to you, then please refer
   // to sequential reference solution for the exact clamping semantics you should follow.
+	int image_x = blockIdx.x * blockDim.x + threadIdx.x;
+	int image_y = blockIdx.y * blockDim.y + threadIdx.y;
+	int patch_x = threadIdx.x;
+	int patch_y = threadIdx.y;
+
+	if (image_x >= numCols ||
+			image_y >= numRows)
+		return;
+
+	//load input to shared memory
+	__shared__ unsigned char pixels[TB_DIM_Y+2][TB_DIM_X+2];
+
+	pixels[patch_y + 1][patch_x + 1] = *(inputChannel+ image_y * numCols +image_x);
+
+	//left side
+	if(patch_x == 0){
+		if(image_x == 0)
+			pixels[patch_y + 1][0] = 0;
+		else
+			pixels[patch_y + 1][0] = *(inputChannel + image_y * numCols + image_x - 1);
+		//left top
+		if(patch_y == 0){
+			if(image_x == 0 && image_y == 0)
+				pixels[0][0] = 0;
+			else
+				pixels[0][0] = *(inputChannel + (image_y -1) * numCols + image_x -1);
+		}
+		//left bottom
+		if(patch_y == TB_DIM_Y -1){
+			if(image_x == 0 && image_y == numRows -1)
+				pixels[TB_DIM_Y + 1][0]= 0;
+			else
+				pixels[TB_DIM_Y + 1][0] = *(inputChannel + (image_y + 1) * numCols + image_x -1);
+		}
+	}
+
+	//right side
+	if (patch_x == TB_DIM_X - 1) {
+		if (image_x == numCols - 1)
+			pixels[patch_y + 1][TB_DIM_X + 1] = 0;
+		else
+			pixels[patch_y + 1][TB_DIM_X + 1] = *(inputChannel + image_y * numCols + image_x + 1);
+		//right top
+		if(patch_y == 0){
+			if(image_x == numCols -1 && image_y == 0)
+				pixels[0][TB_DIM_X +1] = 0;
+			else
+				pixels[0][TB_DIM_X +1] = *(inputChannel + image_y * numCols + image_x + 1);
+		}
+		//right bottom
+		if(patch_y == TB_DIM_Y -1){
+			if(image_x == numCols-1 && image_y == numRows -1)
+				pixels[TB_DIM_Y + 1][TB_DIM_X +1]= 0;
+			else
+				pixels[TB_DIM_Y + 1][TB_DIM_X +1] = *(inputChannel + (image_y + 1) * numCols + image_x + 1);
+		}
+
+	}
+
+	//top side
+	if (patch_y == 0) {
+		if (image_y == 0)
+			pixels[0][patch_x + 1] = 0;
+		else
+			pixels[0][patch_x + 1] = *(inputChannel +(image_y - 1) * numCols + image_x);
+	}
+
+	//bottom
+	if (patch_y == TB_DIM_Y - 1) {
+		if (image_y == numRows - 1)
+			pixels[TB_DIM_Y + 1][patch_x + 1] = 0;
+		else
+			pixels[TB_DIM_Y + 1][patch_x + 1] = *(inputChannel + (image_y +1) * numCols +image_x);
+	}
+
+	//sync within thread block
+	__syncthreads();
+
+	//assume filter is a square matrix
+
+	float result = 0;
+
+	for (int r = -filterWidth / 2; r <= filterWidth / 2; ++r) {
+		for (int c = -filterWidth / 2; c <= filterWidth / 2; ++c) {
+		result + =
+					* (* (filter + (r + filterWidth/2) * filterWidth + c + filterWidth/2);
+		}
+	}
+
+
+					                     ;
+	*(outputChannel+ image_y * numCols + image_x)=(unsigned char)result;
+
+
 }
 
 //This kernel takes in an image represented as a uchar4 and splits
@@ -141,7 +237,7 @@ void separateChannels(const uchar4* const inputImageRGBA,
                       unsigned char* const greenChannel,
                       unsigned char* const blueChannel)
 {
-  // TODO
+  //
   //
   // NOTE: Be careful not to try to access memory that is outside the bounds of
   // the image. You'll want code that performs the following check before accessing
@@ -152,6 +248,15 @@ void separateChannels(const uchar4* const inputImageRGBA,
   // {
   //     return;
   // }
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < numCols && y < numRows){
+		const uchar4* sweetspot = inputImageRGBA + x + y * numCols;
+		*(redChannel + x + y * numCols) = sweetspot->x;
+		*(greenChannel + x + y * numCols) = sweetspot->y;
+		*(blueChannel + x + y * numCols) = sweetspot->z;
+	}
 }
 
 //This kernel takes in three color channels and recombines them
@@ -219,16 +324,20 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
                         unsigned char *d_blueBlurred,
                         const int filterWidth)
 {
-  //TODO: Set reasonable block size (i.e., number of threads per block)
-  const dim3 blockSize;
+  //Set reasonable block size (i.e., number of threads per block)
+  const dim3 blockSize(TB_DIM_X, TB_DIM_Y);
 
-  //TODO:
   //Compute correct grid size (i.e., number of blocks per kernel launch)
   //from the image size and and block size.
-  const dim3 gridSize;
+  const dim3 gridSize((numCols-1) / TB_DIM_X + 1, (numRows-1) / TB_DIM_Y +1);
 
-  //TODO: Launch a kernel for separating the RGBA image into different color channels
-
+  //Launch a kernel for separating the RGBA image into different color channels
+  separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA,
+		  	  	  	  	  	  	  	  	  	numRows,
+		  	  	  	  	  	  	  	  	  	numCols,
+		  	  	  	  	  	  	  	  	  	d_red,
+		  	  	  	  	  	  	  	  	  	d_green,
+		  	  	  	  	  	  	  	  	  	d_blue);
   // Call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
