@@ -102,8 +102,8 @@
 
 #include "utils.h"
 
-const int TB_DIM_X = 64;
-const int TB_DIM_Y = 64;
+const int TB_DIM_X = 16;
+const int TB_DIM_Y = 16;
 
 __global__
 void gaussian_blur(const unsigned char* const inputChannel,
