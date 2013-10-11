@@ -133,81 +133,10 @@ void gaussian_blur(const unsigned char* const inputChannel,
   // to sequential reference solution for the exact clamping semantics you should follow.
 	int image_x = blockIdx.x * blockDim.x + threadIdx.x;
 	int image_y = blockIdx.y * blockDim.y + threadIdx.y;
-	int patch_x = threadIdx.x;
-	int patch_y = threadIdx.y;
 
 	if (image_x >= numCols ||
 			image_y >= numRows)
 		return;
-
-	//load input to shared memory
-	__shared__ unsigned char pixels[TB_DIM_Y+2][TB_DIM_X+2];
-
-	pixels[patch_y + 1][patch_x + 1] = *(inputChannel+ image_y * numCols +image_x);
-
-	//left side
-	if(patch_x == 0){
-		if(image_x == 0)
-			pixels[patch_y + 1][0] = 0;
-		else
-			pixels[patch_y + 1][0] = *(inputChannel + image_y * numCols + image_x - 1);
-		//left top
-		if(patch_y == 0){
-			if(image_x == 0 && image_y == 0)
-				pixels[0][0] = 0;
-			else
-				pixels[0][0] = *(inputChannel + (image_y -1) * numCols + image_x -1);
-		}
-		//left bottom
-		if(patch_y == TB_DIM_Y -1){
-			if(image_x == 0 && image_y == numRows -1)
-				pixels[TB_DIM_Y + 1][0]= 0;
-			else
-				pixels[TB_DIM_Y + 1][0] = *(inputChannel + (image_y + 1) * numCols + image_x -1);
-		}
-	}
-
-	//right side
-	if (patch_x == TB_DIM_X - 1) {
-		if (image_x == numCols - 1)
-			pixels[patch_y + 1][TB_DIM_X + 1] = 0;
-		else
-			pixels[patch_y + 1][TB_DIM_X + 1] = *(inputChannel + image_y * numCols + image_x + 1);
-		//right top
-		if(patch_y == 0){
-			if(image_x == numCols -1 && image_y == 0)
-				pixels[0][TB_DIM_X +1] = 0;
-			else
-				pixels[0][TB_DIM_X +1] = *(inputChannel + image_y * numCols + image_x + 1);
-		}
-		//right bottom
-		if(patch_y == TB_DIM_Y -1){
-			if(image_x == numCols-1 && image_y == numRows -1)
-				pixels[TB_DIM_Y + 1][TB_DIM_X +1]= 0;
-			else
-				pixels[TB_DIM_Y + 1][TB_DIM_X +1] = *(inputChannel + (image_y + 1) * numCols + image_x + 1);
-		}
-
-	}
-
-	//top side
-	if (patch_y == 0) {
-		if (image_y == 0)
-			pixels[0][patch_x + 1] = 0;
-		else
-			pixels[0][patch_x + 1] = *(inputChannel +(image_y - 1) * numCols + image_x);
-	}
-
-	//bottom
-	if (patch_y == TB_DIM_Y - 1) {
-		if (image_y == numRows - 1)
-			pixels[TB_DIM_Y + 1][patch_x + 1] = 0;
-		else
-			pixels[TB_DIM_Y + 1][patch_x + 1] = *(inputChannel + (image_y +1) * numCols +image_x);
-	}
-
-	//sync within thread block
-	__syncthreads();
 
 	//assume filter is a square matrix
 
@@ -215,13 +144,12 @@ void gaussian_blur(const unsigned char* const inputChannel,
 
 	for (int r = -filterWidth / 2; r <= filterWidth / 2; ++r) {
 		for (int c = -filterWidth / 2; c <= filterWidth / 2; ++c) {
-		result + =
-					* (* (filter + (r + filterWidth/2) * filterWidth + c + filterWidth/2);
+		result = result + (*(filter+ (r + filterWidth/2) * filterWidth + c + filterWidth/2));
 		}
 	}
 
 
-					                     ;
+
 	*(outputChannel+ image_y * numCols + image_x)=(unsigned char)result;
 
 
