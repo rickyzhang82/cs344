@@ -85,6 +85,8 @@ int main(int argc, char **argv) {
   //call the students' code
   your_histogram_and_prefixsum(d_luminance, d_cdf, min_logLum, max_logLum,
                                numRows, numCols, numBins);
+
+  std::cout<<"My min :"<<min_logLum<<" My max:"<<max_logLum<<std::endl;
   timer.Stop();
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
   int err = printf("Your code ran in: %f msecs.\n", timer.Elapsed());
@@ -107,6 +109,8 @@ int main(int argc, char **argv) {
 	min_logLum = std::min(h_luminance[i], min_logLum);
     max_logLum = std::max(h_luminance[i], max_logLum);
   }
+
+  std::cout<<"Ref min :"<<min_logLum<<" Ref max:"<<max_logLum<<std::endl;
 
   referenceCalculation(h_luminance, h_cdf, numRows, numCols, numBins, min_logLum, max_logLum);
 

@@ -81,6 +81,105 @@
 
 #include "utils.h"
 
+template <typename T>
+struct IBinary_Operator
+{
+public:
+	__device__ virtual T operator() (const T& a, const T& b)=0;
+};
+
+template <typename T>
+struct Max_Operator: public IBinary_Operator<T>
+{
+public:
+	__device__ virtual T operator() (const T&a, const T& b){
+		T result;
+		result =  (a>=b)? a : b;
+		return result;
+	}
+};
+
+template <typename T>
+struct Min_Operator: public IBinary_Operator<T>
+{
+public:
+	__device__ virtual T operator() (const T&a, const T& b){
+		T result;
+		result =  (a<=b)? a : b;
+		return result;
+	}
+};
+
+template <typename T, typename T_Bin_Op>
+__global__ void _reduction_global_mem_sub_(T * d_out, T * d_in, T_Bin_Op operation)
+{
+    int myId = threadIdx.x + blockDim.x * blockIdx.x;
+    int tid  = threadIdx.x;
+
+    // do reduction in global memory
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (tid < s)
+        {
+            d_in[myId] = operation(d_in[myId], d_in[myId + s]);
+        }
+        __syncthreads();        // make sure all adds at one stage are done!
+    }
+
+    // only thread 0 writes result for this block back to global memory
+    if (tid == 0)
+    {
+        d_out[blockIdx.x] = d_in[myId];
+    }
+}
+
+template <typename T, typename T_Bin_Op>
+void reduction_global_mem(	const T* const d_in,
+							const size_t numElement,
+							T* d_out,
+							T_Bin_Op operation)
+{
+	/*Two step reduction*/
+
+	/*problem scale*/
+    const int maxThreadsPerBlock = 1024;
+    int threads = maxThreadsPerBlock;
+    int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
+
+	/*allocate  result*/
+	T* d_input_array;
+
+	checkCudaErrors(cudaMalloc(&d_input_array,    sizeof(T) * numElement));
+
+	checkCudaErrors(cudaMemcpy(d_input_array,   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
+
+	T* d_intermediate_result;
+	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
+
+
+	/*First, compute local reduction per each thread block*/
+    _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, operation);
+
+	/*Secondly, compute global reduction*/
+    threads = blocks;
+    blocks = 1;
+    _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_out, d_intermediate_result, operation);
+
+}
+
+
+template <typename T, typename T_Bin_Op>
+void reduction(	const T* const d_in,
+				const size_t numElement,
+				T * d_out,
+				T_Bin_Op operation)
+
+{
+	reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+}
+
+
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -99,6 +198,19 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
+	float* d_min_element;
+	float* d_max_element;
+	float* d_out_array;
 
+	checkCudaErrors(cudaMalloc(&d_out_array,    2 * sizeof(float)));
+	d_min_element = d_out_array + 0;
+	d_max_element = d_out_array + 1;
+
+	reduction<float>(d_logLuminance, numRows * numCols, d_min_element, Min_Operator<float>());
+	reduction<float>(d_logLuminance, numRows * numCols, d_max_element, Max_Operator<float>());
+
+	/*Move max and min element to host*/
+	checkCudaErrors(cudaMemcpy(&min_logLum,   d_min_element,   sizeof(float) * 1, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(&max_logLum,   d_max_element,   sizeof(float) * 1, cudaMemcpyDeviceToHost));
 
 }
