@@ -82,6 +82,9 @@ int main(int argc, char **argv) {
   min_logLum = 0.f;
   max_logLum = 1.f;
   timer.Start();
+
+  std::cout<<"# of rows: "<<numRows<<" # of cols: "<<numCols<<" # of bins: "<<numBins<<std::endl;
+
   //call the students' code
   your_histogram_and_prefixsum(d_luminance, d_cdf, min_logLum, max_logLum,
                                numRows, numCols, numBins);
