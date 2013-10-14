@@ -106,7 +106,10 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMemcpy(h_luminance, d_luminance, numRows*numCols*sizeof(float), cudaMemcpyDeviceToHost));
 
   //check results and output the tone-mapped image
-  postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
+  //TODO: uncomment it later
+  //postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
+  min_logLum = 0.f;
+  max_logLum = 1.f;
 
   for (size_t i = 1; i < numCols * numRows; ++i) {
 	min_logLum = std::min(h_luminance[i], min_logLum);
