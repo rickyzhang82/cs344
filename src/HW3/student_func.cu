@@ -162,15 +162,11 @@ void reduction_global_mem(	const T* const d_in,
 	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
 
-	/*First, compute local reduction per each thread block*/
-
+	/*On first level, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
 
-	/*Secondly, compute global reduction*/
-    threads = blocks;
-    blocks = 1;
-
-    _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_out, d_intermediate_result, threads, operation);
+	/*On second level, compute global reduction*/
+    _reduction_global_mem_sub_<T><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
 
     checkCudaErrors(cudaFree(d_input_array));
 
