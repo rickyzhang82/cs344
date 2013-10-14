@@ -165,6 +165,12 @@ void reduction_global_mem(	const T* const d_in,
 	/*On first level, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
 
+    //debug
+    T debug_array[blocks];
+    checkCudaErrors(cudaMemcpy(&debug_array[0],   d_intermediate_result,   sizeof(T) * blocks, cudaMemcpyDeviceToHost));
+    for(int i=0;i<blocks;i++)
+    	std::cout<<debug_array[i]<<" ";
+
 	/*On second level, compute global reduction*/
     _reduction_global_mem_sub_<T><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
 
