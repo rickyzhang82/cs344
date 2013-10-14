@@ -161,6 +161,16 @@ void reduction_global_mem(	const T* const d_in,
 	T* d_intermediate_result;
 	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
+    //debug
+    T h_input_array[numElement];
+    checkCudaErrors(cudaMemcpy(&h_input_array[0],   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToHost));
+    std::cout<<"vector"<<std::endl;
+    for(int i=0;i<numElement;i++){
+    	std::cout<<h_input_array[i]<<" ";
+    	if((numElement+1)%1024 ==0)
+    		std::cout<<std::endl;
+    }
+    std::cout<<std::endl;
 
 	/*On first level, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
@@ -168,8 +178,10 @@ void reduction_global_mem(	const T* const d_in,
     //debug
     T debug_array[blocks];
     checkCudaErrors(cudaMemcpy(&debug_array[0],   d_intermediate_result,   sizeof(T) * blocks, cudaMemcpyDeviceToHost));
+    std::cout<<"intermediate vector"<<std::endl;
     for(int i=0;i<blocks;i++)
     	std::cout<<debug_array[i]<<" ";
+    std::cout<<std::endl;
 
 	/*On second level, compute global reduction*/
     _reduction_global_mem_sub_<T><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
