@@ -150,7 +150,6 @@ void reduction_global_mem(	const T* const d_in,
 	T* d_input_array;
 
 	checkCudaErrors(cudaMalloc(&d_input_array,    sizeof(T) * numElement));
-
 	checkCudaErrors(cudaMemcpy(d_input_array,   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
 
 	T* d_intermediate_result;
@@ -165,17 +164,29 @@ void reduction_global_mem(	const T* const d_in,
     blocks = 1;
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_out, d_intermediate_result, operation);
 
+    checkCudaErrors(cudaFree(d_input_array));
+
 }
 
 
 template <typename T, typename T_Bin_Op>
 void reduction(	const T* const d_in,
 				const size_t numElement,
-				T * d_out,
+				T * h_out,
 				T_Bin_Op operation)
 
 {
+	/*allocate d_out*/
+	T * d_out;
+
+	checkCudaErrors(cudaMalloc(&d_out,    sizeof(T) * 1));
+
 	reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+
+	/*copy device output to host*/
+	checkCudaErrors(cudaMemcpy(h_out,   d_out,   sizeof(T) * 1, cudaMemcpyDeviceToHost));
+
+	checkCudaErrors(cudaFree(d_out));
 }
 
 
@@ -198,19 +209,12 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
-	float* d_min_element;
-	float* d_max_element;
-	float* d_out_array;
 
-	checkCudaErrors(cudaMalloc(&d_out_array,    2 * sizeof(float)));
-	d_min_element = d_out_array + 0;
-	d_max_element = d_out_array + 1;
 
-	reduction<float>(d_logLuminance, numRows * numCols, d_min_element, Min_Operator<float>());
-	reduction<float>(d_logLuminance, numRows * numCols, d_max_element, Max_Operator<float>());
+	reduction<float>(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-	/*Move max and min element to host*/
-	checkCudaErrors(cudaMemcpy(&min_logLum,   d_min_element,   sizeof(float) * 1, cudaMemcpyDeviceToHost));
-	checkCudaErrors(cudaMemcpy(&max_logLum,   d_max_element,   sizeof(float) * 1, cudaMemcpyDeviceToHost));
+	reduction<float>(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 }
