@@ -117,18 +117,17 @@ int main(int argc, char **argv) {
   }
 
   std::cout<<"Ref min :"<<min_logLum<<" Ref max:"<<max_logLum<<std::endl;
+  //TOOD: uncomment it later
+  //referenceCalculation(h_luminance, h_cdf, numRows, numCols, numBins, min_logLum, max_logLum);
 
-  referenceCalculation(h_luminance, h_cdf, numRows, numCols, numBins, min_logLum, max_logLum);
-
-  checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
+  //checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
 
   //check results and output the tone-mapped image
-  //TODO: uncomment it later
+
   //postProcess(reference_file, numRows, numCols, min_logLum, max_logLum);
 
-  cleanupGlobalMemory();
+  //cleanupGlobalMemory();
 
-  //TOOD: uncomment it later
   //compareImages(reference_file, output_file, useEpsCheck, perPixelError, globalError);
 
   return 0;
