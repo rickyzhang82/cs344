@@ -165,6 +165,72 @@ void gaussian_blur(const unsigned char* const inputChannel,
 
 }
 
+__global__
+void gaussian_blur_shared_ver(const unsigned char* const inputChannel,
+                   unsigned char* const outputChannel,
+                   int numRows, int numCols,
+                   const float* const filter, const int filterWidth)
+{
+
+  // NOTE: Be sure to compute any intermediate results in floating point
+  // before storing the final result as unsigned char.
+
+  // NOTE: Be careful not to try to access memory that is outside the bounds of
+  // the image. You'll want code that performs the following check before accessing
+  // GPU memory:
+  //
+  // if ( absolute_image_position_x >= numCols ||
+  //      absolute_image_position_y >= numRows )
+  // {
+  //     return;
+  // }
+
+  // NOTE: If a thread's absolute position 2D position is within the image, but some of
+  // its neighbors are outside the image, then you will need to be extra careful. Instead
+  // of trying to read such a neighbor value from GPU memory (which won't work because
+  // the value is out of bounds), you should explicitly clamp the neighbor values you read
+  // to be within the bounds of the image. If this is not clear to you, then please refer
+  // to sequential reference solution for the exact clamping semantics you should follow.
+	int image_x = blockIdx.x * blockDim.x + threadIdx.x;
+	int image_y = blockIdx.y * blockDim.y + threadIdx.y;
+	int patch_x = threadIdx.x;
+	int patch_y = threadIdx.y;
+
+	if (image_x >= numCols ||
+			image_y >= numRows)
+		return;
+
+	int shift = filterWidth / 2;
+	//load input to shared memory
+	extern __shared__ unsigned char pixels[];
+
+	int PATCH_COLS =  TB_DIM_X + shift * 2;
+
+	pixels[(patch_y + shift) * PATCH_COLS + patch_x + shift] = *(inputChannel+ image_y * numCols +image_x);
+
+    //sync within thread block
+	__syncthreads();
+
+	//assume filter is a square matrix
+
+	float result = 0;
+
+	for (int r = -1 * shift; r <= shift; ++r) {
+		for (int c = -1 * shift; c <= shift; ++c) {
+		result  = result +
+				pixels[(patch_y + shift + r) * PATCH_COLS + patch_x + shift +c] *
+				(* (filter + (r + shift) * filterWidth + c + shift));
+		}
+	}
+
+
+					                     ;
+	*(outputChannel+ image_y * numCols + image_x)=(unsigned char)result;
+
+
+}
+
+
 //This kernel takes in an image represented as a uchar4 and splits
 //it into three images consisting of only one color channel each
 __global__
@@ -287,6 +353,11 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
   gaussian_blur<<<gridSize, blockSize>>>(d_red, d_redBlurred, numRows, numCols, d_filter, filterWidth);
   gaussian_blur<<<gridSize, blockSize>>>(d_green, d_greenBlurred, numRows, numCols, d_filter, filterWidth);
   gaussian_blur<<<gridSize, blockSize>>>(d_blue, d_blueBlurred, numRows, numCols, d_filter, filterWidth);
+//  TODO: test shared memory
+//  int sharedMemSize = sizeof(unsigned char) * (TB_DIM_Y + filterWidth / 2 * 2) * (TB_DIM_X + filterWidth / 2 * 2);
+//  gaussian_blur_shared_ver<<<gridSize, blockSize, sharedMemSize>>>(d_red, d_redBlurred, numRows, numCols, d_filter, filterWidth);
+//  gaussian_blur_shared_ver<<<gridSize, blockSize, sharedMemSize>>>(d_green, d_greenBlurred, numRows, numCols, d_filter, filterWidth);
+//  gaussian_blur_shared_ver<<<gridSize, blockSize, sharedMemSize>>>(d_blue, d_blueBlurred, numRows, numCols, d_filter, filterWidth);
 
   // Again, call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
