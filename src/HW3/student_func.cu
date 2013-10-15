@@ -243,14 +243,6 @@ void reduction_shared_mem(	const T* const d_in,
 	/*On first pass, compute local reduction per each thread block*/
 	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads/2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_in, numElement, operation);
 
-    //debug
-    T debug_array[blocks];
-    checkCudaErrors(cudaMemcpy(&debug_array[0],   d_intermediate_result,   sizeof(T) * blocks, cudaMemcpyDeviceToHost));
-    std::cout<<"intermediate vector"<<std::endl;
-    for(int i=0;i<blocks;i++)
-    	std::cout<<debug_array[i]<<" ";
-    std::cout<<std::endl;
-
 	/*On second pass, compute global reduction*/
 	_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads/2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
 
