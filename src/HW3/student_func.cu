@@ -86,16 +86,16 @@ template <typename T>
 struct IBinary_Operator
 {
 public:
-	__device__ virtual T operator() (const T& a, const T& b)=0;
+	__device__ __host__ virtual T operator() (const T& a, const T& b)=0;
 };
 
 template <typename T>
 struct Max_Operator: public IBinary_Operator<T>
 {
 public:
-	__device__ virtual T operator() (const T&a, const T& b){
+	__device__ __host__ virtual T operator() (const T&a, const T& b){
 		T result;
-		result =  (a>=b)? a : b;
+		result =  (a<b)? b : a;
 		return result;
 	}
 };
@@ -104,9 +104,9 @@ template <typename T>
 struct Min_Operator: public IBinary_Operator<T>
 {
 public:
-	__device__ virtual T operator() (const T&a, const T& b){
+	__device__ __host__ virtual T operator() (const T&a, const T& b){
 		T result;
-		result =  (a<=b)? a : b;
+		result =  (a>b)? b : a;
 		return result;
 	}
 };
@@ -164,13 +164,13 @@ void reduction_global_mem(	const T* const d_in,
     //debug
     T h_input_array[numElement];
     checkCudaErrors(cudaMemcpy(&h_input_array[0],   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToHost));
-    std::cout<<"vector"<<std::endl;
+
+    T result;
     for(int i=0;i<numElement;i++){
-    	std::cout<<h_input_array[i]<<" ";
-    	if((numElement+1)%1024 ==0)
-    		std::cout<<std::endl;
+    	result = operation(h_input_array[i], result);
     }
     std::cout<<std::endl;
+    std::cout<<"My ref result: "<<result<<std::endl;
 
 	/*On first level, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);

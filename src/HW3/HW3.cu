@@ -157,7 +157,26 @@ void preProcess(float** d_luminance, unsigned int** d_cdf,
     green[i] = imgPtr[3 * i + 1];
     red[i]   = imgPtr[3 * i + 2];
   }
+  //debug
+  {
+	  int image_index_1d=63672;
+	  float delta=.0001f;
+  std::cout<<"R:"<<red[image_index_1d]<<" G:"<<green[image_index_1d]<<" B:"<<blue[image_index_1d]<<std::endl;
+  float r = red[ image_index_1d ];
+  float g = green[ image_index_1d ];
+  float b = blue[ image_index_1d ];
 
+  float X = ( r * 0.4124f ) + ( g * 0.3576f ) + ( b * 0.1805f );
+  float Y = ( r * 0.2126f ) + ( g * 0.7152f ) + ( b * 0.0722f );
+  float Z = ( r * 0.0193f ) + ( g * 0.1192f ) + ( b * 0.9505f );
+
+  float L = X + Y + Z;
+  float x = X / L;
+  float y = Y / L;
+
+  float log_Y = log10f( delta + Y );
+  std::cout<<"X:"<<X<<" Y:"<<Y<<" Z:"<<Z<<" L:"<<L<<" log_Y:"<<log_Y<<std::endl;
+  }
   delete[] imgPtr; //being good citizens are releasing resources
                    //allocated in loadImageHDR
 

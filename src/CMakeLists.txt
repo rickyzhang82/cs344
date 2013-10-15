@@ -31,7 +31,6 @@ if(CUDA_FOUND)
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wall;")
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")	
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -g")
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-G")
     endif (UNIX)
 
     # add debugging to CUDA NVCC flags.  For NVidia's NSight tools.

@@ -110,10 +110,25 @@ int main(int argc, char **argv) {
   //postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
   min_logLum = 0.f;
   max_logLum = 1.f;
+  int bOnce = 1;
 
   for (size_t i = 1; i < numCols * numRows; ++i) {
-	min_logLum = std::min(h_luminance[i], min_logLum);
-    max_logLum = std::max(h_luminance[i], max_logLum);
+	  if(i==39157)
+		  std::cout<<"Before i: "<<i<<" h_luminance[i]:"<<h_luminance[i]<<" max_logLum:"<<max_logLum<<std::endl;
+
+	min_logLum = std::min<double>(h_luminance[i], min_logLum);
+    max_logLum = std::max<double>(h_luminance[i], max_logLum);
+	  if(i==39157)
+		  std::cout<<"After i: "<<i<<" h_luminance[i]:"<<h_luminance[i]<<" max_logLum:"<<max_logLum<<std::endl;
+
+    if(!(fabs(max_logLum - 38.3088) < 0.0001) && i>39157 && bOnce){
+        std::cout<<"Bingo!"<<" Diff:"<<fabs(h_luminance[i] - 38.3088)<<" on  index:"<<i<<" h_luminance:"<<h_luminance[i]<<" max_logLum"<<max_logLum<<std::endl;
+        bOnce = 0;
+    }
+    //if(h_luminance[i]< min_logLum)
+    //    min_logLum =  h_luminance[i];
+    //if(h_luminance[i]> max_logLum)
+    //    max_logLum = h_luminance[i];
   }
 
   std::cout<<"Ref min :"<<min_logLum<<" Ref max:"<<max_logLum<<std::endl;
