@@ -198,6 +198,8 @@ __global__ void _reduction_shared_mem_sub_(	T * d_out,
 	int gap = blockDim.x;
 	if(myId + gap < totalCount)
 		s_array[tid] = operation(d_in[myId], d_in[myId + gap]);
+	else
+		s_array[tid] = d_in[myId];
 
 	/*synch all threads within block*/
 	__syncthreads();
