@@ -116,8 +116,10 @@ int main(int argc, char **argv) {
 	  if(i==39157)
 		  std::cout<<"Before i: "<<i<<" h_luminance[i]:"<<h_luminance[i]<<" max_logLum:"<<max_logLum<<std::endl;
 
-	min_logLum = std::min<double>(h_luminance[i], min_logLum);
-    max_logLum = std::max<double>(h_luminance[i], max_logLum);
+	if(!isnanf(h_luminance[i])){
+		min_logLum = std::min(h_luminance[i], min_logLum);
+		max_logLum = std::max(h_luminance[i], max_logLum);
+	}
 	  if(i==39157)
 		  std::cout<<"After i: "<<i<<" h_luminance[i]:"<<h_luminance[i]<<" max_logLum:"<<max_logLum<<std::endl;
 
