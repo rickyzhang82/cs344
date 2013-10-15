@@ -95,6 +95,10 @@ struct Max_Operator: public IBinary_Operator<T>
 public:
 	__device__ __host__ virtual T operator() (const T&a, const T& b){
 		T result;
+		if(isnan(a))
+			return b;
+		if(isnan(b))
+			return a;
 		result =  (a<b)? b : a;
 		return result;
 	}
@@ -106,6 +110,10 @@ struct Min_Operator: public IBinary_Operator<T>
 public:
 	__device__ __host__ virtual T operator() (const T&a, const T& b){
 		T result;
+		if(isnan(a))
+			return b;
+		if(isnan(b))
+			return a;
 		result =  (a>b)? b : a;
 		return result;
 	}
