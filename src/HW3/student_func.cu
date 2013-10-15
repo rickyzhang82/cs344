@@ -186,17 +186,22 @@ __global__ void _reduction_shared_mem_sub_(	T * d_out,
 											const size_t totalCount,
 											T_Bin_Op operation)
 {
-	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	/*halve the number of threads in one block*/
+	int myId = threadIdx.x + 2 * blockDim.x * blockIdx.x;
 	int tid = threadIdx.x;
-
-	extern __shared__ T s_array[];
-	/*copy data to shared memory within block*/
-	s_array[tid] = d_in[myId];
-	/*synch all threads within block*/
-	__syncthreads();
 
 	if(myId >= totalCount)
 		return;
+
+	extern __shared__ T s_array[];
+	/*reduce directly in first step*/
+	int gap = blockDim.x;
+	if(myId + gap < totalCount)
+		s_array[tid] = operation(d_in[myId], d_in[myId + gap]);
+
+	/*synch all threads within block*/
+	__syncthreads();
+
 
 	// do reduction in shared memory
 
@@ -234,10 +239,10 @@ void reduction_shared_mem(	const T* const d_in,
 	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
 	/*On first pass, compute local reduction per each thread block*/
-	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads, sizeof(T) * threads>>>(d_intermediate_result, d_in, numElement, operation);
+	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads/2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_in, numElement, operation);
 
 	/*On second pass, compute global reduction*/
-	_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads, sizeof(T) * threads>>>(d_out, d_intermediate_result, blocks, operation);
+	_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads/2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
 
 }
 
