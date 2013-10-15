@@ -153,45 +153,27 @@ void reduction_global_mem(	const T* const d_in,
 							T* d_out,
 							T_Bin_Op operation)
 {
-	/*Two step reduction*/
+	/*Two passes reduction*/
 
 	/*problem scale*/
     const int maxThreadsPerBlock = 1024;
     int threads = maxThreadsPerBlock;
     int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
 
-	/*allocate  result*/
+	/*clone d_in --> d_input_array*/
 	T* d_input_array;
 
 	checkCudaErrors(cudaMalloc(&d_input_array,    sizeof(T) * numElement));
 	checkCudaErrors(cudaMemcpy(d_input_array,   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
 
+	/*allocate intermediate result for first pass*/
 	T* d_intermediate_result;
 	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
-    //debug
-    T h_input_array[numElement];
-    checkCudaErrors(cudaMemcpy(&h_input_array[0],   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToHost));
-
-    T result;
-    for(int i=0;i<numElement;i++){
-    	result = operation(h_input_array[i], result);
-    }
-    std::cout<<std::endl;
-    std::cout<<"My ref result: "<<result<<std::endl;
-
-	/*On first level, compute local reduction per each thread block*/
+	/*On first pass, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
 
-    //debug
-    T debug_array[blocks];
-    checkCudaErrors(cudaMemcpy(&debug_array[0],   d_intermediate_result,   sizeof(T) * blocks, cudaMemcpyDeviceToHost));
-    std::cout<<"intermediate vector"<<std::endl;
-    for(int i=0;i<blocks;i++)
-    	std::cout<<debug_array[i]<<" ";
-    std::cout<<std::endl;
-
-	/*On second level, compute global reduction*/
+	/*On second pass, compute global reduction*/
     _reduction_global_mem_sub_<T><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
 
     checkCudaErrors(cudaFree(d_input_array));
