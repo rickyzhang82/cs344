@@ -210,7 +210,7 @@ __global__ void _reduction_shared_mem_sub_(	T * d_out,
 
 	// only thread 0 writes result for this block back to global memory
 	if (tid == 0)
-		d_out[blockIdx.x] = s_array[myId];
+		d_out[blockIdx.x] = s_array[0];
 
 
 }
