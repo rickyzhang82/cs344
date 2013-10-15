@@ -121,7 +121,7 @@ public:
 
 template <typename T, typename T_Bin_Op>
 __global__ void _reduction_global_mem_sub_(	T * d_out,
-											T * d_in,
+											T *  d_in,
 											const size_t totalCount,
 											T_Bin_Op operation)
 {
@@ -146,7 +146,7 @@ __global__ void _reduction_global_mem_sub_(	T * d_out,
 
 
 }
-
+/*wrapper function for global memory*/
 template <typename T, typename T_Bin_Op>
 void reduction_global_mem(	const T* const d_in,
 							const size_t numElement,
@@ -171,15 +171,75 @@ void reduction_global_mem(	const T* const d_in,
 	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
 	/*On first pass, compute local reduction per each thread block*/
-    _reduction_global_mem_sub_<T><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
+    _reduction_global_mem_sub_<T,T_Bin_Op><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
 
 	/*On second pass, compute global reduction*/
-    _reduction_global_mem_sub_<T><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
+    _reduction_global_mem_sub_<T,T_Bin_Op><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
 
     checkCudaErrors(cudaFree(d_input_array));
 
 }
 
+template <typename T, typename T_Bin_Op>
+__global__ void _reduction_shared_mem_sub_(	T * d_out,
+											const T * const d_in,
+											const size_t totalCount,
+											T_Bin_Op operation)
+{
+	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	int tid = threadIdx.x;
+
+	extern __shared__ T s_array[];
+	/*copy data to shared memory within block*/
+	s_array[tid] = d_in[myId];
+	/*synch all threads within block*/
+	__syncthreads();
+
+	if(myId >= totalCount)
+		return;
+
+	// do reduction in shared memory
+
+	for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+		if (tid < s) {
+			if(myId +s < totalCount)
+				s_array[tid] = operation(s_array[tid], s_array[tid + s]);
+		}
+		__syncthreads();        // make sure all adds at one stage are done!
+	}
+
+	// only thread 0 writes result for this block back to global memory
+	if (tid == 0)
+		d_out[blockIdx.x] = d_in[myId];
+
+
+}
+
+/*wrapper function for shared memory*/
+template <typename T, typename T_Bin_Op>
+void reduction_shared_mem(	const T* const d_in,
+							const size_t numElement,
+							T* d_out,
+							T_Bin_Op operation)
+{
+	/*Two passes reduction*/
+
+	/*problem scale*/
+    const int maxThreadsPerBlock = 1024;
+    int threads = maxThreadsPerBlock;
+    int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
+
+	/*allocate intermediate result for first pass*/
+	T* d_intermediate_result;
+	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
+
+	/*On first pass, compute local reduction per each thread block*/
+	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads, sizeof(T) * threads>>>(d_intermediate_result, d_in, numElement, operation);
+
+	/*On second pass, compute global reduction*/
+	_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads, sizeof(T) * threads>>>(d_out, d_intermediate_result, blocks, operation);
+
+}
 
 template <typename T, typename T_Bin_Op>
 void reduction(	const T* const d_in,
@@ -193,7 +253,9 @@ void reduction(	const T* const d_in,
 
 	checkCudaErrors(cudaMalloc(&d_out,    sizeof(T) * 1));
 
-	reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+	//reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+
+	reduction_shared_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
 
 	/*copy device output to host*/
 	checkCudaErrors(cudaMemcpy(h_out,   d_out,   sizeof(T) * 1, cudaMemcpyDeviceToHost));
@@ -223,10 +285,10 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        incoming d_cdf pointer which already has been allocated for you)       */
 
 
-	reduction<float>(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
+	reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-	reduction<float>(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
+	reduction< float,Max_Operator<float> >(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 }
