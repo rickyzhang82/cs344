@@ -235,17 +235,35 @@ void reduction_shared_mem(	const T* const d_in,
     const int maxThreadsPerBlock = 1024;
     int threads = maxThreadsPerBlock;
     int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
-
-	/*allocate intermediate result for first pass*/
 	T* d_intermediate_result;
-	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
+	T* d_input_array = (T*) d_in;
+	size_t input_array_element = numElement;
 
-	/*On first pass, compute local reduction per each thread block*/
-	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads/2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_in, numElement, operation);
+    while(blocks <= maxThreadsPerBlock){
+    	/*allocate intermediate result for first pass*/
+    	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
-	/*On second pass, compute global reduction*/
-	_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads/2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
+    	/*On first pass, compute local reduction per each thread block*/
+    	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads/2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_input_array, input_array_element, operation);
 
+    	if(d_input_array != d_in)
+    		checkCudaErrors(cudaFree(d_input_array));
+
+    	/*On second pass, compute global reduction*/
+    	if(blocks <= maxThreadsPerBlock)
+
+    		_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads/2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
+
+    	else{
+    		/*if intermediate result can not hold in one thread block. Repeat first pass until it fits in one thread block.*/
+    		input_array_element = blocks;
+
+    		blocks = (blocks - 1)/ maxThreadsPerBlock + 1;
+
+    		d_input_array = d_intermediate_result;
+
+    	}
+    }
 }
 
 template <typename T, typename T_Bin_Op>
