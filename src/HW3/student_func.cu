@@ -86,94 +86,94 @@ template <typename T>
 struct IBinary_Operator
 {
 public:
-	__device__ __host__ virtual T operator() (const T& a, const T& b)=0;
+    __device__ __host__ virtual T operator() (const T& a, const T& b)=0;
 };
 
 template <typename T>
 struct Max_Operator: public IBinary_Operator<T>
 {
 public:
-	__device__ __host__ virtual T operator() (const T&a, const T& b){
-		T result;
-		if(isnan(a))
-			return b;
-		if(isnan(b))
-			return a;
-		result =  (a<b)? b : a;
-		return result;
-	}
+    __device__ __host__ virtual T operator() (const T&a, const T& b){
+        T result;
+        if(isnan(a))
+            return b;
+        if(isnan(b))
+            return a;
+        result =  (a<b)? b : a;
+        return result;
+    }
 };
 
 template <typename T>
 struct Min_Operator: public IBinary_Operator<T>
 {
 public:
-	__device__ __host__ virtual T operator() (const T&a, const T& b){
-		T result;
-		if(isnan(a))
-			return b;
-		if(isnan(b))
-			return a;
-		result =  (a>b)? b : a;
-		return result;
-	}
+    __device__ __host__ virtual T operator() (const T&a, const T& b){
+        T result;
+        if(isnan(a))
+            return b;
+        if(isnan(b))
+            return a;
+        result =  (a>b)? b : a;
+        return result;
+    }
 };
 
 template <typename T, typename T_Bin_Op>
-__global__ void _reduction_global_mem_sub_(	T * d_out,
-											T *  d_in,
-											const size_t totalCount,
-											T_Bin_Op operation)
+__global__ void _reduction_global_mem_sub_( T * d_out,
+                                            T *  d_in,
+                                            const size_t totalCount,
+                                            T_Bin_Op operation)
 {
-	int myId = threadIdx.x + blockDim.x * blockIdx.x;
-	int tid = threadIdx.x;
+    int myId = threadIdx.x + blockDim.x * blockIdx.x;
+    int tid = threadIdx.x;
 
-	if(myId >= totalCount)
-		return;
-	// do reduction in global memory
+    if(myId >= totalCount)
+        return;
+    // do reduction in global memory
 
-	for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-		if (tid < s) {
-			if(myId +s < totalCount)
-				d_in[myId] = operation(d_in[myId], d_in[myId + s]);
-		}
-		__syncthreads();        // make sure all adds at one stage are done!
-	}
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            if(myId +s < totalCount)
+                d_in[myId] = operation(d_in[myId], d_in[myId + s]);
+        }
+        __syncthreads();        // make sure all adds at one stage are done!
+    }
 
-	// only thread 0 writes result for this block back to global memory
-	if (tid == 0)
-		d_out[blockIdx.x] = d_in[myId];
+    // only thread 0 writes result for this block back to global memory
+    if (tid == 0)
+        d_out[blockIdx.x] = d_in[myId];
 
 
 }
 /*wrapper function for global memory*/
 template <typename T, typename T_Bin_Op>
-void reduction_global_mem(	const T* const d_in,
-							const size_t numElement,
-							T* d_out,
-							T_Bin_Op operation)
+void reduction_global_mem(  const T* const d_in,
+                            const size_t numElement,
+                            T* d_out,
+                            T_Bin_Op operation)
 {
-	/*Two passes reduction*/
+    /*Two passes reduction*/
 
-	/*problem scale*/
+    /*problem scale*/
     const int maxThreadsPerBlock = 1024;
     int threads = maxThreadsPerBlock;
     int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
 
-	/*clone d_in --> d_input_array*/
-	T* d_input_array;
+    /*clone d_in --> d_input_array*/
+    T* d_input_array;
 
-	checkCudaErrors(cudaMalloc(&d_input_array,    sizeof(T) * numElement));
-	checkCudaErrors(cudaMemcpy(d_input_array,   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
+    checkCudaErrors(cudaMalloc(&d_input_array,    sizeof(T) * numElement));
+    checkCudaErrors(cudaMemcpy(d_input_array,   d_in,   sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
 
-	/*allocate intermediate result for first pass*/
-	T* d_intermediate_result;
-	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
+    /*allocate intermediate result for first pass*/
+    T* d_intermediate_result;
+    checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
-	/*On first pass, compute local reduction per each thread block*/
+    /*On first pass, compute local reduction per each thread block*/
     _reduction_global_mem_sub_<T,T_Bin_Op><<<blocks, threads>>>(d_intermediate_result, d_input_array, numElement, operation);
 
-	/*On second pass, compute global reduction*/
+    /*On second pass, compute global reduction*/
     _reduction_global_mem_sub_<T,T_Bin_Op><<<1, threads>>>(d_out, d_intermediate_result, blocks, operation);
 
     checkCudaErrors(cudaFree(d_input_array));
@@ -181,122 +181,149 @@ void reduction_global_mem(	const T* const d_in,
 }
 
 template <typename T, typename T_Bin_Op>
-__global__ void _reduction_shared_mem_sub_(	T * d_out,
-											const T * const d_in,
-											const size_t totalCount,
-											T_Bin_Op operation)
+__global__ void _reduction_shared_mem_sub_( T * d_out,
+                                            const T * const d_in,
+                                            const size_t totalCount,
+                                            T_Bin_Op operation)
 {
-	/*halve the number of threads in one block*/
-	int myId = threadIdx.x + 2 * blockDim.x * blockIdx.x;
-	int tid = threadIdx.x;
+    /*halve the number of threads in one block*/
+    int myId = threadIdx.x + 2 * blockDim.x * blockIdx.x;
+    int tid = threadIdx.x;
 
-	if(myId >= totalCount)
-		return;
+    if(myId >= totalCount)
+        return;
 
-	extern __shared__ T s_array[];
-	/*reduce directly in first step*/
-	int gap = blockDim.x;
-	if(myId + gap < totalCount)
-		s_array[tid] = operation(d_in[myId], d_in[myId + gap]);
-	else
-		s_array[tid] = d_in[myId];
+    extern __shared__ T s_array[];
+    /*reduce directly in first step*/
+    int gap = blockDim.x;
+    if(myId + gap < totalCount)
+        s_array[tid] = operation(d_in[myId], d_in[myId + gap]);
+    else
+        s_array[tid] = d_in[myId];
 
-	/*synch all threads within block*/
-	__syncthreads();
+    /*synch all threads within block*/
+    __syncthreads();
 
 
-	// do reduction in shared memory
+    // do reduction in shared memory
 
-	for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-		if (tid < s) {
-			if(myId +s < totalCount)
-				s_array[tid] = operation(s_array[tid], s_array[tid + s]);
-		}
-		__syncthreads();        // make sure all adds at one stage are done!
-	}
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            if(myId +s < totalCount)
+                s_array[tid] = operation(s_array[tid], s_array[tid + s]);
+        }
+        __syncthreads();        // make sure all adds at one stage are done!
+    }
 
-	// only thread 0 writes result for this block back to global memory
-	if (tid == 0)
-		d_out[blockIdx.x] = s_array[0];
+    // only thread 0 writes result for this block back to global memory
+    if (tid == 0)
+        d_out[blockIdx.x] = s_array[0];
 
 
 }
 
 /*wrapper function for shared memory*/
 template <typename T, typename T_Bin_Op>
-void reduction_shared_mem(	const T* const d_in,
-							const size_t numElement,
-							T* d_out,
-							T_Bin_Op operation)
+void reduction_shared_mem(  const T* const d_in,
+                            const size_t numElement,
+                            T* d_out,
+                            T_Bin_Op operation)
 {
-	/*Two passes reduction*/
+    /*Two passes reduction*/
 
-	/*problem scale*/
+    /*problem scale*/
     const int maxThreadsPerBlock = 1024;
     int threads = maxThreadsPerBlock;
     int blocks = (numElement - 1)/ maxThreadsPerBlock + 1;
-	T* d_intermediate_result;
-	T* d_input_array = (T*) d_in;
-	size_t input_array_element = numElement;
+    T* d_intermediate_result;
+    T* d_input_array = (T*) d_in;
+    size_t input_array_element = numElement;
 
     do{
-    	/*allocate intermediate result for first pass*/
-    	checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
+        /*allocate intermediate result for first pass*/
+        checkCudaErrors(cudaMalloc(&d_intermediate_result,    sizeof(T) * blocks));
 
-    	/*On first pass, compute local reduction per each thread block*/
-    	_reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads / 2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_input_array, input_array_element, operation);
+        /*On first pass, compute local reduction per each thread block*/
+        _reduction_shared_mem_sub_<T, T_Bin_Op><<<blocks, threads / 2, sizeof(T) * threads / 2>>>(d_intermediate_result, d_input_array, input_array_element, operation);
 
-    	if(d_input_array != d_in)
-    		checkCudaErrors(cudaFree(d_input_array));
+        if(d_input_array != d_in)
+            checkCudaErrors(cudaFree(d_input_array));
 
-    	/*On second pass, compute global reduction.
-    	 *If the number of element of intermediate result can fit into one thread block, run final reduction.*/
-    	if(blocks <= maxThreadsPerBlock)
+        /*On second pass, compute global reduction.
+         *If the number of element of intermediate result can fit into one thread block, run final reduction.*/
+        if(blocks <= maxThreadsPerBlock)
 
-    		_reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads / 2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
+            _reduction_shared_mem_sub_<T, T_Bin_Op><<<1, threads / 2, sizeof(T) * threads / 2>>>(d_out, d_intermediate_result, blocks, operation);
 
-    	else{
-    		/*Otherwise, repeat first pass until it fits in one thread block.*/
-    		input_array_element = blocks;
+        else{
+            /*Otherwise, repeat first pass until it fits in one thread block.*/
+            input_array_element = blocks;
 
-    		blocks = (blocks - 1)/ maxThreadsPerBlock + 1;
+            blocks = (blocks - 1)/ maxThreadsPerBlock + 1;
 
-    		d_input_array = d_intermediate_result;
+            d_input_array = d_intermediate_result;
 
-    	}
+        }
 
     }while(blocks > maxThreadsPerBlock);
 }
 
 template <typename T, typename T_Bin_Op>
-void reduction(	const T* const d_in,
-				const size_t numElement,
-				T * h_out,
-				T_Bin_Op operation)
+void reduction( const T* const d_in,
+                const size_t numElement,
+                T * h_out,
+                T_Bin_Op operation)
 
 {
-	/*allocate d_out*/
-	T * d_out;
+    /*allocate d_out*/
+    T * d_out;
 
-	checkCudaErrors(cudaMalloc(&d_out,    sizeof(T) * 1));
+    checkCudaErrors(cudaMalloc(&d_out,    sizeof(T) * 1));
 
-	//reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+    //reduction_global_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
 
-	reduction_shared_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
+    reduction_shared_mem<T, T_Bin_Op>(d_in, numElement, d_out, operation);
 
-	/*copy device output to host*/
-	checkCudaErrors(cudaMemcpy(h_out,   d_out,   sizeof(T) * 1, cudaMemcpyDeviceToHost));
+    /*copy device output to host*/
+    checkCudaErrors(cudaMemcpy(h_out,   d_out,   sizeof(T) * 1, cudaMemcpyDeviceToHost));
 
-	checkCudaErrors(cudaFree(d_out));
+    checkCudaErrors(cudaFree(d_out));
 }
 
 template <typename T>
-__global__ void histogram_atomic_version(const T* const d_in,
-										 T* d_out,
-								 	 	 T min_log,
-								 	 	 T numBin_over_lumRange,
-								 	 	 const sizt_t )
+__global__ void _histogram_atomic_version_(	const T* const d_in,
+											int* d_out,
+											T min_logLum,
+											T lumRange,
+											const size_t numBins)
 {
+	int tid = threadIdx.x;
+
+	int myId = blockDim.x * blockIdx.x + tid;
+
+	if(myId > numBins)
+		return;
+
+	int binIndex = (int)floor((d_in[myId] - min_logLum) / lumRange * numBins);
+
+	atomicAdd(&(d_out[binIndex]), 1);
+}
+
+template <typename T>
+void histogram( const T* const d_in,
+                size_t numBins,
+                T min_logLum,
+                T max_logLum,
+                int* d_out)
+{
+
+    int threads = 1024;
+
+    int blocks = (numBins - 1) / threads + 1;
+
+    float lumRange = max_logLum - min_logLum;
+
+    _histogram_atomic_version_<float> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numBins);
 
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
@@ -318,15 +345,28 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 
-	reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
-	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	int * d_hist;
+	/*allocate histogram output in device memory*/
+	checkCudaErrors(cudaMalloc(&d_hist, sizeof(int) * numBins));
 
-	reduction< float,Max_Operator<float> >(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
-	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+    reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
 
-	float numBin_over_lumRange = numBins / (max_logLum - min_logLum);
+    reduction< float,Max_Operator<float> >(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
+
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+    histogram< float > (d_logLuminance, numBins, min_logLum, max_logLum, d_hist);
+
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+    //debug
+    int* h_hist;
+    h_hist = (int*) malloc(sizeof(int) * numBins);
+    checkCudaErrors(cudaMemcpy(h_hist,   d_hist,   sizeof(int) * numBins, cudaMemcpyDeviceToHost));
+    for(int i=0;i<numBins;i++)
+    	std::cout<<h_hist[i]<<" ";
 
 
-
-
+    //exclusive_scan...
+    checkCudaErrors(cudaFree(d_hist));
 }
