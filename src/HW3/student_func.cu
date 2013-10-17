@@ -295,13 +295,14 @@ __global__ void _histogram_atomic_version_(	const T* const d_in,
 											int* d_out,
 											T min_logLum,
 											T lumRange,
+											const size_t numElement,
 											const size_t numBins)
 {
 	int tid = threadIdx.x;
 
 	int myId = blockDim.x * blockIdx.x + tid;
 
-	if(myId > numBins)
+	if(myId > numElement)
 		return;
 
 	int binIndex = (int)floor((d_in[myId] - min_logLum) / lumRange * numBins);
@@ -311,6 +312,7 @@ __global__ void _histogram_atomic_version_(	const T* const d_in,
 
 template <typename T>
 void histogram( const T* const d_in,
+				size_t numElements,
                 size_t numBins,
                 T min_logLum,
                 T max_logLum,
@@ -319,11 +321,11 @@ void histogram( const T* const d_in,
 
     int threads = 1024;
 
-    int blocks = (numBins - 1) / threads + 1;
+    int blocks = (numElements - 1) / threads + 1;
 
     float lumRange = max_logLum - min_logLum;
 
-    _histogram_atomic_version_<float> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numBins);
+    _histogram_atomic_version_<float> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numElements, numBins);
 
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
@@ -355,7 +357,7 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-    histogram< float > (d_logLuminance, numBins, min_logLum, max_logLum, d_hist);
+    histogram< float > (d_logLuminance, numRows * numCols, numBins, min_logLum, max_logLum, d_hist);
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
