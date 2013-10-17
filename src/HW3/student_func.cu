@@ -305,7 +305,7 @@ __global__ void _histogram_atomic_version_(	const T* const d_in,
 	if(myId > numElement)
 		return;
 
-	int binIndex = (int)floor((d_in[myId] - min_logLum) / lumRange * numBins);
+	int binIndex = min( (int)floor((d_in[myId] - min_logLum) / lumRange * numBins), (int)numBins - 1 );
 
 	atomicAdd(&(d_out[binIndex]), 1);
 }
@@ -319,7 +319,7 @@ void histogram( const T* const d_in,
                 int* d_out)
 {
 
-    int threads = 1024;
+    int threads = 512;
 
     int blocks = (numElements - 1) / threads + 1;
 
@@ -350,6 +350,7 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 	int * d_hist;
 	/*allocate histogram output in device memory*/
 	checkCudaErrors(cudaMalloc(&d_hist, sizeof(int) * numBins));
+	checkCudaErrors(cudaMemset(d_hist, 0, sizeof(int) * numBins));
 
     reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
 
