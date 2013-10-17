@@ -290,8 +290,15 @@ void reduction(	const T* const d_in,
 	checkCudaErrors(cudaFree(d_out));
 }
 
+template <typename T>
+__global__ void histogram_atomic_version(const T* const d_in,
+										 T* d_out,
+								 	 	 T min_log,
+								 	 	 T numBin_over_lumRange,
+								 	 	 const sizt_t )
+{
 
-
+}
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -311,11 +318,15 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 
-
 	reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 	reduction< float,Max_Operator<float> >(d_logLuminance, numRows * numCols, &max_logLum, Max_Operator<float>());
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+	float numBin_over_lumRange = numBins / (max_logLum - min_logLum);
+
+
+
 
 }
