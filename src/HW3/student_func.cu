@@ -311,6 +311,26 @@ __global__ void _histogram_atomic_version_(	const T* const d_in,
 }
 
 template <typename T>
+__global__ void _histogram_atomic_free_version_(	const T* const d_in,
+													int* d_out,
+													T min_logLum,
+													T lumRange,
+													const size_t numElement,
+													const size_t numBins,
+													const int totalThreads)
+{
+	int tid = threadIdx.x;
+
+	int myId = blockDim.x * blockIdx.x + tid;
+
+	//TODO: loop through elementPerThread
+
+	int binIndex = min( (int)floor((d_in[myId] - min_logLum) / lumRange * numBins), (int)numBins - 1 );
+
+	atomicAdd(&(d_out[binIndex]), 1);
+}
+
+template <typename T>
 void histogram( const T* const d_in,
 				size_t numElements,
                 size_t numBins,
@@ -319,13 +339,30 @@ void histogram( const T* const d_in,
                 int* d_out)
 {
 
-    int threads = 512;
+	int threads = 512;
 
     int blocks = (numElements - 1) / threads + 1;
 
     float lumRange = max_logLum - min_logLum;
 
     _histogram_atomic_version_<float> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numElements, numBins);
+
+    /*testing atomic free version histogram*/
+if(0){
+	int threads = 256;
+
+	int elementPerThread = 4;
+
+	int blocks = numElements / (threads * elementPerThread);
+
+	int*  d_intermediate_hist;
+
+	float lumRange = max_logLum - min_logLum;
+
+	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(int) * numBins * blocks * threads));
+
+	_histogram_atomic_free_version_<float> <<<blocks, threads>>(d_in, d_intermediate_hist, min_logLum, lumRange, numElements, numBins, blocks * threads);
+}
 
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
