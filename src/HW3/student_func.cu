@@ -82,6 +82,10 @@
 #include "utils.h"
 #include <cfloat>
 
+//template specialization for shared memory
+
+
+
 template <typename T>
 struct IBinary_Operator
 {
@@ -119,6 +123,16 @@ public:
     }
 };
 
+template <typename T>
+struct Add_Operator: public IBinary_Operator<T>
+{
+public:
+    __device__ __host__ virtual T operator() (const T&a, const T& b){
+
+        return a + b;
+    }
+};
+
 template <typename T, typename T_Bin_Op>
 __global__ void _reduction_global_mem_sub_( T * d_out,
                                             T *  d_in,
@@ -146,6 +160,7 @@ __global__ void _reduction_global_mem_sub_( T * d_out,
 
 
 }
+
 /*wrapper function for global memory*/
 template <typename T, typename T_Bin_Op>
 void reduction_global_mem(  const T* const d_in,
@@ -317,17 +332,28 @@ __global__ void _histogram_atomic_free_version_(	const T* const d_in,
 													T lumRange,
 													const size_t numElement,
 													const size_t numBins,
-													const int totalThreads)
+													const int totalThreads,
+													const int elementPerThread)
 {
 	int tid = threadIdx.x;
 
 	int myId = blockDim.x * blockIdx.x + tid;
 
-	//TODO: loop through elementPerThread
+	int input_index;
 
-	int binIndex = min( (int)floor((d_in[myId] - min_logLum) / lumRange * numBins), (int)numBins - 1 );
+	int binIndex;
 
-	atomicAdd(&(d_out[binIndex]), 1);
+	for(int i = 0; i < elementPerThread ; i++){
+
+		input_index = (totalThreads * i) + myId;
+
+		if(input_index < numElement){
+
+			binIndex = min( (int)floor((d_in[input_index] - min_logLum) / lumRange * numBins), (int)numBins - 1 );
+
+			*(d_out + totalThreads * binIndex + myId)= *(d_out + totalThreads * binIndex + myId) + 1;
+		}
+	}
 }
 
 template <typename T>
@@ -338,31 +364,44 @@ void histogram( const T* const d_in,
                 T max_logLum,
                 int* d_out)
 {
-
+	if(0){
 	int threads = 512;
 
     int blocks = (numElements - 1) / threads + 1;
 
-    float lumRange = max_logLum - min_logLum;
+    T lumRange = max_logLum - min_logLum;
 
-    _histogram_atomic_version_<float> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numElements, numBins);
-
+    _histogram_atomic_version_<T> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numElements, numBins);
+	}
     /*testing atomic free version histogram*/
-if(0){
+
 	int threads = 256;
 
-	int elementPerThread = 4;
+	int elementsPerThread = 4;
 
-	int blocks = numElements / (threads * elementPerThread);
+	int blocks = numElements / (threads * elementsPerThread);
+
+	int totla_threads = threads * blocks;
 
 	int*  d_intermediate_hist;
 
 	float lumRange = max_logLum - min_logLum;
 
-	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(int) * numBins * blocks * threads));
+	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(int) * numBins * totla_threads));
 
-	_histogram_atomic_free_version_<float> <<<blocks, threads>>(d_in, d_intermediate_hist, min_logLum, lumRange, numElements, numBins, blocks * threads);
-}
+	_histogram_atomic_free_version_<T> <<<blocks, threads>>>(d_in, d_intermediate_hist, min_logLum, lumRange, numElements, numBins, totla_threads, elementsPerThread);
+
+	int* h_bin = (int*) malloc(sizeof(int)*numBins);
+
+	/*reduce bin*/
+	for(int bin_index = 0 ; bin_index < numBins; bin_index++)
+
+		   reduction< int, Add_Operator<int> >(d_intermediate_hist + bin_index * totla_threads, totla_threads, h_bin + bin_index, Add_Operator<int>());
+
+	//copy to device memory
+    checkCudaErrors(cudaMemcpy(h_bin,   d_out,   sizeof(int) * numBins, cudaMemcpyHostToDevice));
+
+	free(h_bin);
 
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
