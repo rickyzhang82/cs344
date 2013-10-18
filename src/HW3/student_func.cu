@@ -83,7 +83,30 @@
 #include <cfloat>
 
 //template specialization for shared memory
+// non-specialized class template
+template <class T>
+class SharedMem
+{
+public:
+    // Ensure that we won't compile any un-specialized types
+    __device__ T* getPointer() { return NULL; };
+};
 
+// specialization for int
+template <>
+class SharedMem <int>
+{
+public:
+    __device__ int* getPointer() { extern __shared__ int s_int[]; return s_int; }
+};
+
+// specialization for float
+template <>
+class SharedMem <float>
+{
+public:
+    __device__ float* getPointer() { extern __shared__ float s_float[]; return s_float; }
+};
 
 
 template <typename T>
@@ -208,7 +231,10 @@ __global__ void _reduction_shared_mem_sub_( T * d_out,
     if(myId >= totalCount)
         return;
 
-    extern __shared__ T s_array[];
+    SharedMem<T> sharedmem;
+
+    T* s_array = sharedmem.getPointer();
+
     /*reduce directly in first step*/
     int gap = blockDim.x;
     if(myId + gap < totalCount)
