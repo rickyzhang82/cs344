@@ -94,10 +94,10 @@ public:
 
 // specialization for int
 template <>
-class SharedMem <int>
+class SharedMem <unsigned int>
 {
 public:
-    __device__ int* getPointer() { extern __shared__ int s_int[]; return s_int; }
+    __device__ unsigned int * getPointer() { extern __shared__ unsigned int s_uint[]; return s_uint; }
 };
 
 // specialization for float
@@ -154,6 +154,12 @@ public:
 
         return a + b;
     }
+
+    __device__ __host__ virtual T getIdentity(){
+
+        return 0;
+    }
+
 };
 
 template <typename T, typename T_Bin_Op>
@@ -333,7 +339,7 @@ void reduction( const T* const d_in,
 
 template <typename T>
 __global__ void _histogram_atomic_version_(	const T* const d_in,
-											int* d_out,
+											unsigned int* d_out,
 											T min_logLum,
 											T lumRange,
 											const size_t numElement,
@@ -353,7 +359,7 @@ __global__ void _histogram_atomic_version_(	const T* const d_in,
 
 template <typename T>
 __global__ void _histogram_atomic_free_version_(	const T* const d_in,
-													int* d_out,
+													unsigned int* d_out,
 													T min_logLum,
 													T lumRange,
 													const size_t numElement,
@@ -388,7 +394,7 @@ void histogram( const T* const d_in,
                 size_t numBins,
                 T min_logLum,
                 T max_logLum,
-                int* d_out)
+                unsigned int* d_out)
 {
 	if(1){
 	int threads = 512;
@@ -410,29 +416,179 @@ void histogram( const T* const d_in,
 
 	int totla_threads = threads * blocks;
 
-	int*  d_intermediate_hist;
+	unsigned int*  d_intermediate_hist;
 
 	float lumRange = max_logLum - min_logLum;
 
-	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(int) * numBins * totla_threads));
+	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(unsigned int) * numBins * totla_threads));
 	
-    checkCudaErrors(cudaMemset(d_intermediate_hist, 0, sizeof(int) * numBins * totla_threads));
+    checkCudaErrors(cudaMemset(d_intermediate_hist, 0, sizeof(unsigned int) * numBins * totla_threads));
 
 	_histogram_atomic_free_version_<T> <<<blocks, threads>>>(d_in, d_intermediate_hist, min_logLum, lumRange, numElements, numBins, totla_threads, elementsPerThread);
 
-	int* h_bin = (int*) malloc(sizeof(int)*numBins);
+	unsigned int* h_bin = (unsigned int*) malloc(sizeof(unsigned int)*numBins);
 
 	/*reduce bin*/
 	for(int bin_index = 0 ; bin_index < numBins; bin_index++)
 
-		   reduction< int, Add_Operator<int> >(d_intermediate_hist + bin_index * totla_threads, totla_threads, h_bin + bin_index, Add_Operator<int>());
+		   reduction< unsigned int, Add_Operator<unsigned int> >(d_intermediate_hist + bin_index * totla_threads, totla_threads, h_bin + bin_index, Add_Operator<unsigned int>());
 
 	//copy to device memory
-    checkCudaErrors(cudaMemcpy(d_out,   h_bin,   sizeof(int) * numBins, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_out,   h_bin,   sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
 
 	free(h_bin);
     }
 }
+
+template <typename T, typename T_Bin_Op>
+__global__ void _add_back_aux_array_(T* d_in,
+									 const T* aux_array,
+									 int blocks,
+									 int threads,
+									 T_Bin_Op operation)
+{
+	int tid = threadIdx.x;
+
+	for(int i=0;i<threads;i++)
+		d_in[tid * threads + i] =operation(d_in[tid * threads + i], aux_array[tid]);
+}
+
+/**
+ * Precondition: # of threads is power of 2. d_out is pre-allocated array with size sizeof(T) * numBins
+ * 				 sumBlock is pre-allocated array with size sizeof(T) * # of thread blocks
+ */
+template <typename T, typename T_Bin_Op>
+__global__ void _exclusive_scan_two_phase_( const T* const d_in,
+					 	 	 	 	 	 	T* d_out,
+					 	 	 	 	 	 	size_t numBins,
+					 	 	 	 	 	 	T* sumBlock,
+					 	 	 	 	 	 	T_Bin_Op operation)
+{
+    SharedMem<T> sharedmem;
+
+    T* s_array = sharedmem.getPointer();
+
+    int bid = blockIdx.x;
+
+    int tid = threadIdx.x;
+
+    int base_addr = 2 * blockDim.x * bid;
+
+    int myId = base_addr +  tid * 2 ;
+
+    s_array[2 * tid] = d_in[myId];
+
+    s_array[2 * tid +1] = operation(s_array[myId], d_in[myId + 1]);
+
+    //synchronize all threads in block after loading element to shared memory
+    __syncthreads();
+
+    int offset = 2;
+    //reduce phase
+    for(unsigned int d = blockDim.x / 2 ; d > 0 ; d >>= 1){
+
+    	if(tid < d){
+    		int index_left =  offset * ( tid * 2 + 1) -1;
+    		int index_right = index_left + offset;
+    		s_array[index_right] = operation(s_array[index_right],s_array[index_left]);
+    	}
+
+    	__syncthreads();
+
+    	offset *= 2;
+    }
+
+    if(tid == 0){
+    	/*store block sum from last element*/
+   		*(sumBlock + bid) = s_array[2 * blockDim.x -1];
+    	/*assign identity value to last element*/
+    	s_array[2 * blockDim.x -1] = operation.getIdentity();
+    }
+
+    //down-sweep phase
+    for(unsigned int d = 1; d < blockDim.x * 2 ; d *=2){
+
+    	if(tid < d){
+    		int index_left =  offset * ( tid * 2 + 1) -1;
+    		int index_right = index_left + offset;
+    		T temp = s_array[index_right];
+    		s_array[index_right] = operation(s_array[index_right], s_array[index_left]);
+    		s_array[index_left] = temp;
+    	}
+
+    	__syncthreads();
+    	offset >>= 1;
+    }
+    //assign back shared memory to output
+    d_out[myId] = s_array[ 2 * tid];
+    d_out[myId + 1] = s_array[ 2* tid +1];
+}
+
+/*wrapper function for exclusive scan*/
+template <typename T, typename T_Bin_Op>
+void exclusive_scan( const T* const d_in,
+					 T*  d_out,
+					 size_t numElement,
+					 T_Bin_Op operation)
+{
+	/*
+	 * a. split array into N/B blocks. Each block perform exclusive scan algorithm independently.
+	 *    Store the last value in reduce phase (ie, sum of element in block) to an auxiliary array.
+	 * b. inclusive scan auxiliary array ==> block sum array
+	 * c. add element[i] of block sum array to each element in block[i].
+	 * If size of element is not power of 2, pad zero.
+	 */
+
+	const int maxThreadsPerBlock = 1024;
+	int threads = maxThreadsPerBlock; /*make sure this is power of 2*/
+	int blocks = (numElement -1) / threads + 1;
+
+	/*pad element with identity value if input size is not divisive of threads */
+	T* d_augmented_in;
+
+	if(numElement % threads == 0 )
+
+		d_augmented_in = (T*) d_in;
+
+	else{
+
+		checkCudaErrors(cudaMalloc(&d_augmented_in, sizeof(T) * blocks * threads));
+
+		checkCudaErrors(cudaMemcpy(d_augmented_in, d_in, sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
+
+		checkCudaErrors(cudaMemset(d_augmented_in + numElement, operation.getIdentity(), sizeof(T) * (blocks * threads - numElement)));
+	}
+
+	T* d_aux_array;
+	checkCudaErrors(cudaMalloc(&d_aux_array, sizeof(T) * blocks));
+
+	_exclusive_scan_two_phase_< T, T_Bin_Op > <<<blocks, threads / 2, sizeof(T) * threads>>> (d_augmented_in, d_out, numElement, d_aux_array, operation);
+
+	if(blocks != 1){
+
+	    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+		//exclusive scan block sum array
+		T* d_aux_array_result;
+
+		checkCudaErrors(cudaMalloc(&d_aux_array_result, sizeof(T) * blocks));
+
+		exclusive_scan<T,T_Bin_Op> ( d_aux_array, d_aux_array_result, blocks, operation);
+
+		_add_back_aux_array_<T, T_Bin_Op> <<< 1, blocks>>> ( d_out, d_aux_array_result, blocks, threads, operation);
+
+		checkCudaErrors(cudaFree(d_aux_array_result));
+
+
+	}
+
+	//clean up
+	if(d_augmented_in != d_in)
+		checkCudaErrors(cudaFree(d_augmented_in));
+
+	checkCudaErrors(cudaFree(d_aux_array));
+}
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -452,10 +608,7 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 
-	int * d_hist;
-	/*allocate histogram output in device memory*/
-	checkCudaErrors(cudaMalloc(&d_hist, sizeof(int) * numBins));
-	checkCudaErrors(cudaMemset(d_hist, 0, sizeof(int) * numBins));
+	unsigned int * d_hist;
 
     reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
 
@@ -463,19 +616,15 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
+	/*allocate histogram output in device memory*/
+	checkCudaErrors(cudaMalloc(&d_hist, sizeof(unsigned int) * numBins));
+	checkCudaErrors(cudaMemset(d_hist, 0, sizeof(unsigned int) * numBins));
+
     histogram< float > (d_logLuminance, numRows * numCols, numBins, min_logLum, max_logLum, d_hist);
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-    //debug
-    if(0)
-    {
-    int* h_hist;
-    h_hist = (int*) malloc(sizeof(int) * numBins);
-    checkCudaErrors(cudaMemcpy(h_hist,   d_hist,   sizeof(int) * numBins, cudaMemcpyDeviceToHost));
-    for(int i=0;i<numBins;i++)
-    	std::cout<<h_hist[i]<<" ";
-    }
+    exclusive_scan < unsigned int , Add_Operator<unsigned int> > (d_hist, d_cdf, numBins, Add_Operator<unsigned int>());
 
     //exclusive_scan...
     checkCudaErrors(cudaFree(d_hist));
