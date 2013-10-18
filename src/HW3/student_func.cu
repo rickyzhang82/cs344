@@ -425,7 +425,7 @@ void histogram( const T* const d_in,
 		   reduction< int, Add_Operator<int> >(d_intermediate_hist + bin_index * totla_threads, totla_threads, h_bin + bin_index, Add_Operator<int>());
 
 	//copy to device memory
-    checkCudaErrors(cudaMemcpy(h_bin,   d_out,   sizeof(int) * numBins, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_out,   h_bin,   sizeof(int) * numBins, cudaMemcpyHostToDevice));
 
 	free(h_bin);
 
