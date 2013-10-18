@@ -390,7 +390,7 @@ void histogram( const T* const d_in,
                 T max_logLum,
                 int* d_out)
 {
-	if(0){
+	if(1){
 	int threads = 512;
 
     int blocks = (numElements - 1) / threads + 1;
@@ -400,10 +400,11 @@ void histogram( const T* const d_in,
     _histogram_atomic_version_<T> <<<blocks, threads>>> (d_in, d_out, min_logLum, lumRange, numElements, numBins);
 	}
     /*testing atomic free version histogram*/
+    /*too much overhead. It slows things down.*/
+    if(0){
+	int threads = 32;
 
-	int threads = 256;
-
-	int elementsPerThread = 4;
+	int elementsPerThread = 512;
 
 	int blocks = numElements / (threads * elementsPerThread);
 
@@ -414,6 +415,8 @@ void histogram( const T* const d_in,
 	float lumRange = max_logLum - min_logLum;
 
 	checkCudaErrors(cudaMalloc(&d_intermediate_hist, sizeof(int) * numBins * totla_threads));
+	
+    checkCudaErrors(cudaMemset(d_intermediate_hist, 0, sizeof(int) * numBins * totla_threads));
 
 	_histogram_atomic_free_version_<T> <<<blocks, threads>>>(d_in, d_intermediate_hist, min_logLum, lumRange, numElements, numBins, totla_threads, elementsPerThread);
 
@@ -428,7 +431,7 @@ void histogram( const T* const d_in,
     checkCudaErrors(cudaMemcpy(d_out,   h_bin,   sizeof(int) * numBins, cudaMemcpyHostToDevice));
 
 	free(h_bin);
-
+    }
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
@@ -465,12 +468,14 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
     //debug
+    if(0)
+    {
     int* h_hist;
     h_hist = (int*) malloc(sizeof(int) * numBins);
     checkCudaErrors(cudaMemcpy(h_hist,   d_hist,   sizeof(int) * numBins, cudaMemcpyDeviceToHost));
     for(int i=0;i<numBins;i++)
     	std::cout<<h_hist[i]<<" ";
-
+    }
 
     //exclusive_scan...
     checkCudaErrors(cudaFree(d_hist));
