@@ -612,7 +612,7 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
-
+if(0){
 	unsigned int * d_hist;
 
     reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
@@ -633,4 +633,29 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 
     //exclusive_scan...
     checkCudaErrors(cudaFree(d_hist));
+}
+
+	//debug
+	unsigned int* h_array, * d_array, *d_scan_result, *h_scan_result;
+	int count = 3 * 1024;
+
+	h_array = (unsigned int*)malloc(sizeof(unsigned int) * count);
+
+	//init
+	for(int i=0;i<count;i++)
+		*(h_array+i)=1;
+
+	checkCudaErrors(cudaMalloc(&d_array, sizeof(unsigned int) * count));
+	checkCudaErrors(cudaMalloc(&d_scan_result, sizeof(unsigned int) * count));
+
+	checkCudaErrors(cudaMemcpy(d_array, h_array, sizeof(unsigned int) * count, cudaMemcpyHostToDevice));
+    exclusive_scan < unsigned int , Add_Operator<unsigned int> > (d_array, d_scan_result, count, Add_Operator<unsigned int>());
+
+    checkCudaErrors(cudaMemcpy(h_scan_result, d_scan_result, sizeof(unsigned int) * count, cudaMemcpyDeviceToHost));
+
+    for(int i=0;i<count;i++)
+    	std::cout<<*(h_scan_result+i)<<" ";
+    std::cout<<std::endl;
+
+
 }
