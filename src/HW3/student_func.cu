@@ -558,15 +558,41 @@ void exclusive_scan( const T* const d_in,
 
 		checkCudaErrors(cudaMalloc(&d_augmented_in, sizeof(T) * blocks * threads));
 
+		checkCudaErrors(cudaMemset(d_augmented_in , operation.getIdentity(), sizeof(T) * (blocks * threads)));
+
 		checkCudaErrors(cudaMemcpy(d_augmented_in, d_in, sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
 
-		checkCudaErrors(cudaMemset(d_augmented_in + numElement, operation.getIdentity(), sizeof(T) * (blocks * threads - numElement)));
 	}
 
 	T* d_aux_array;
 	checkCudaErrors(cudaMalloc(&d_aux_array, sizeof(T) * blocks));
 
 	_exclusive_scan_two_phase_< T, T_Bin_Op > <<<blocks, threads / 2, sizeof(T) * threads>>> (d_augmented_in, d_out, numElement, d_aux_array, operation);
+
+	//debug
+	T* h_augmented_in, *h_out, *h_aux_array;
+	h_augmented_in=(T*)malloc(sizeof(T)*numElement);
+	h_out=(T*)malloc(sizeof(T)*numElement);
+	h_aux_array=(T*)malloc(sizeof(T)*blocks);
+	checkCudaErrors(cudaMemcpy(h_augmented_in, d_augmented_in,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(h_out, d_out,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(h_aux_array, d_aux_array,sizeof(T)*blocks, cudaMemcpyDeviceToHost));
+
+	std::cout<<"numElement:"<<numElement<<std::endl;
+	std::cout<<"d_augmented_in"<<std::endl;
+	for(int i=0;i<numElement;i++)
+		std::cout<<h_augmented_in[i]<<" ";
+	std::cout<<std::endl;
+
+	std::cout<<"d_out"<<std::endl;
+	for(int i=0;i<numElement;i++)
+			std::cout<<h_out[i]<<" ";
+	std::cout<<std::endl;
+
+	std::cout<<"d_aux_array"<<std::endl;
+	for(int i=0;i<blocks;i++)
+			std::cout<<h_aux_array[i]<<" ";
+	std::cout<<std::endl;
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
@@ -637,7 +663,7 @@ if(0){
 
 	//debug
 	unsigned int* h_array, * d_array, *d_scan_result, *h_scan_result;
-	int count = 3 * 1024;
+	int count =  800;
 
 	h_array = (unsigned int*)malloc(sizeof(unsigned int) * count);
 
