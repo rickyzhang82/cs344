@@ -564,9 +564,10 @@ void exclusive_scan( const T* const d_in,
 
 	_exclusive_scan_two_phase_< T, T_Bin_Op > <<<blocks, threads / 2, sizeof(T) * threads>>> (d_augmented_in, d_out, numElement, d_aux_array, operation);
 
-	if(blocks != 1){
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-	    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+	if(blocks != 1){
 
 		//exclusive scan block sum array
 		T* d_aux_array_result;
