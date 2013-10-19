@@ -498,6 +498,8 @@ __global__ void _exclusive_scan_two_phase_( const T* const d_in,
     	offset *= 2;
     }
 
+    __syncthreads();
+
     if(tid == 0){
     	/*store block sum from last element*/
    		*(sumBlock + bid) = s_array[2 * blockDim.x -1];
@@ -508,6 +510,8 @@ __global__ void _exclusive_scan_two_phase_( const T* const d_in,
     //down-sweep phase
     for(unsigned int d = 1; d < blockDim.x * 2 ; d *=2){
 
+    	offset >>= 1;
+
     	if(tid < d){
     		int index_left =  offset * ( tid * 2 + 1) -1;
     		int index_right = index_left + offset;
@@ -517,7 +521,7 @@ __global__ void _exclusive_scan_two_phase_( const T* const d_in,
     	}
 
     	__syncthreads();
-    	offset >>= 1;
+
     }
     //assign back shared memory to output
     d_out[myId] = s_array[ 2 * tid];
