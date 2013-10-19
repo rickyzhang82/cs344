@@ -478,7 +478,7 @@ __global__ void _exclusive_scan_two_phase_( const T* const d_in,
 
     s_array[2 * tid] = d_in[myId];
 
-    s_array[2 * tid +1] = operation(s_array[myId], d_in[myId + 1]);
+    s_array[2 * tid +1] = operation(s_array[2 * tid], d_in[myId + 1]);
 
     //synchronize all threads in block after loading element to shared memory
     __syncthreads();
@@ -548,15 +548,19 @@ void exclusive_scan( const T* const d_in,
 	int blocks = (numElement -1) / threads + 1;
 
 	/*pad element with identity value if input size is not divisive of threads */
-	T* d_augmented_in;
+	T* d_augmented_in, * d_augmented_out;
 
-	if(numElement % threads == 0 )
+	if(numElement % threads == 0 ){
 
 		d_augmented_in = (T*) d_in;
+        
+        d_augmented_out = (T*) d_out;
 
-	else{
+	}else{
 
 		checkCudaErrors(cudaMalloc(&d_augmented_in, sizeof(T) * blocks * threads));
+		
+        checkCudaErrors(cudaMalloc(&d_augmented_out, sizeof(T) * blocks * threads));
 
 		checkCudaErrors(cudaMemset(d_augmented_in , operation.getIdentity(), sizeof(T) * (blocks * threads)));
 
@@ -567,15 +571,17 @@ void exclusive_scan( const T* const d_in,
 	T* d_aux_array;
 	checkCudaErrors(cudaMalloc(&d_aux_array, sizeof(T) * blocks));
 
-	_exclusive_scan_two_phase_< T, T_Bin_Op > <<<blocks, threads / 2, sizeof(T) * threads>>> (d_augmented_in, d_out, numElement, d_aux_array, operation);
+	_exclusive_scan_two_phase_< T, T_Bin_Op > <<<blocks, threads / 2, sizeof(T) * threads>>> (d_augmented_in, d_augmented_out, numElement, d_aux_array, operation);
 
-	//debug
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	
+    //debug
 	T* h_augmented_in, *h_out, *h_aux_array;
 	h_augmented_in=(T*)malloc(sizeof(T)*numElement);
 	h_out=(T*)malloc(sizeof(T)*numElement);
 	h_aux_array=(T*)malloc(sizeof(T)*blocks);
 	checkCudaErrors(cudaMemcpy(h_augmented_in, d_augmented_in,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
-	checkCudaErrors(cudaMemcpy(h_out, d_out,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(h_out, d_augmented_out,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
 	checkCudaErrors(cudaMemcpy(h_aux_array, d_aux_array,sizeof(T)*blocks, cudaMemcpyDeviceToHost));
 
 	std::cout<<"numElement:"<<numElement<<std::endl;
@@ -584,7 +590,7 @@ void exclusive_scan( const T* const d_in,
 		std::cout<<h_augmented_in[i]<<" ";
 	std::cout<<std::endl;
 
-	std::cout<<"d_out"<<std::endl;
+	std::cout<<"d_augmented_out"<<std::endl;
 	for(int i=0;i<numElement;i++)
 			std::cout<<h_out[i]<<" ";
 	std::cout<<std::endl;
@@ -594,7 +600,6 @@ void exclusive_scan( const T* const d_in,
 			std::cout<<h_aux_array[i]<<" ";
 	std::cout<<std::endl;
 
-    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 
 	if(blocks != 1){
@@ -605,7 +610,7 @@ void exclusive_scan( const T* const d_in,
 		checkCudaErrors(cudaMalloc(&d_aux_array_result, sizeof(T) * blocks));
 
 		exclusive_scan<T,T_Bin_Op> ( d_aux_array, d_aux_array_result, blocks, operation);
-
+        //TODO: Ricky fix this sometimes blocks greater than 1024
 		_add_back_aux_array_<T, T_Bin_Op> <<< 1, blocks>>> ( d_out, d_aux_array_result, blocks, threads, operation);
 
 		checkCudaErrors(cudaFree(d_aux_array_result));
@@ -617,7 +622,12 @@ void exclusive_scan( const T* const d_in,
 	if(d_augmented_in != d_in)
 		checkCudaErrors(cudaFree(d_augmented_in));
 
-	checkCudaErrors(cudaFree(d_aux_array));
+	if(d_augmented_out != d_out){
+	    checkCudaErrors(cudaMemcpy(d_out, d_augmented_out, sizeof(T) * numElement, cudaMemcpyDeviceToDevice));
+    	checkCudaErrors(cudaFree(d_augmented_out));
+	}
+
+    checkCudaErrors(cudaFree(d_aux_array));
 }
 
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
@@ -663,9 +673,10 @@ if(0){
 
 	//debug
 	unsigned int* h_array, * d_array, *d_scan_result, *h_scan_result;
-	int count =  800;
+	int count = 1280 * 1024;
 
 	h_array = (unsigned int*)malloc(sizeof(unsigned int) * count);
+	h_scan_result = (unsigned int*)malloc(sizeof(unsigned int) * count);
 
 	//init
 	for(int i=0;i<count;i++)
@@ -676,6 +687,8 @@ if(0){
 
 	checkCudaErrors(cudaMemcpy(d_array, h_array, sizeof(unsigned int) * count, cudaMemcpyHostToDevice));
     exclusive_scan < unsigned int , Add_Operator<unsigned int> > (d_array, d_scan_result, count, Add_Operator<unsigned int>());
+
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
     checkCudaErrors(cudaMemcpy(h_scan_result, d_scan_result, sizeof(unsigned int) * count, cudaMemcpyDeviceToHost));
 
