@@ -449,8 +449,11 @@ __global__ void _add_back_aux_array_(T* d_in,
 {
 	int tid = threadIdx.x;
 
-	for(int i=0;i<threads;i++)
-		d_in[tid * threads + i] =operation(d_in[tid * threads + i], aux_array[tid]);
+	int bid = blockIdx.x;
+
+	int myId = bid * blockDim.x + tid;
+
+	d_in[myId] =operation(d_in[myId], aux_array[bid]);
 }
 
 /**
@@ -611,7 +614,7 @@ void exclusive_scan( const T* const d_in,
 
 		exclusive_scan<T,T_Bin_Op> ( d_aux_array, d_aux_array_result, blocks, operation);
         //TODO: Ricky fix this sometimes blocks greater than 1024
-		_add_back_aux_array_<T, T_Bin_Op> <<< 1, blocks>>> ( d_out, d_aux_array_result, blocks, threads, operation);
+		_add_back_aux_array_<T, T_Bin_Op> <<< blocks, threads>>> ( d_out, d_aux_array_result, blocks, threads, operation);
 
 		checkCudaErrors(cudaFree(d_aux_array_result));
 
