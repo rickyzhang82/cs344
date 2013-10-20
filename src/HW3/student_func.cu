@@ -578,40 +578,6 @@ void exclusive_scan( const T* const d_in,
 
     cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	
-    //debug
-    if(0){
-
-	T* h_augmented_in;
-	h_augmented_in=(T*)malloc(sizeof(T)*numElement);
-	checkCudaErrors(cudaMemcpy(h_augmented_in, d_augmented_in,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
-    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-	std::cout<<"numElement:"<<numElement<<std::endl;
-	std::cout<<"d_augmented_in"<<std::endl;
-	for(int i=0;i<numElement;i++)
-		std::cout<<h_augmented_in[i]<<" ";
-	std::cout<<std::endl;
-
-    T * h_out;
-	h_out=(T*)malloc(sizeof(T)*numElement);
-	checkCudaErrors(cudaMemcpy(h_out, d_augmented_out,sizeof(T)*numElement, cudaMemcpyDeviceToHost));
-    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-	std::cout<<"d_augmented_out"<<std::endl;
-	for(int i=0;i<numElement;i++)
-			std::cout<<h_out[i]<<" ";
-	std::cout<<std::endl;
-    }
-    if(1){
-    T * h_aux_array;
-	h_aux_array=(T*)malloc(sizeof(T)*blocks);
-    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-	checkCudaErrors(cudaMemcpy(h_aux_array, d_aux_array,sizeof(T)*blocks, cudaMemcpyDeviceToHost));
-	std::cout<<"d_aux_array with size: "<<blocks<<std::endl;
-	for(int i=0;i<blocks;i++)
-			std::cout<<h_aux_array[i]<<" ";
-	std::cout<<std::endl;
-    }
-
-
 	if(blocks != 1){
 
 		//exclusive scan block sum array
@@ -624,7 +590,6 @@ void exclusive_scan( const T* const d_in,
         _add_back_aux_array_<T, T_Bin_Op> <<< blocks, threads>>> ( d_augmented_out, d_aux_array_result, blocks, threads, operation);
 
 		checkCudaErrors(cudaFree(d_aux_array_result));
-
 
 	}
 
@@ -648,7 +613,6 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   const size_t numCols,
                                   const size_t numBins)
 {
-  //TODO
   /*Here are the steps you need to implement
     1) find the minimum and maximum value in the input logLuminance channel
        store in min_logLum and max_logLum
@@ -658,7 +622,6 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
-if(0){
 	unsigned int * d_hist;
 
     reduction< float,Min_Operator<float> >(d_logLuminance, numRows * numCols, &min_logLum, Min_Operator<float>());
@@ -677,35 +640,6 @@ if(0){
 
     exclusive_scan < unsigned int , Add_Operator<unsigned int> > (d_hist, d_cdf, numBins, Add_Operator<unsigned int>());
 
-    //exclusive_scan...
     checkCudaErrors(cudaFree(d_hist));
-}
-
-	//debug
-	unsigned int* h_array, * d_array, *d_scan_result, *h_scan_result;
-	int count =1025 *  1024;
-
-	h_array = (unsigned int*)malloc(sizeof(unsigned int) * count);
-	h_scan_result = (unsigned int*)malloc(sizeof(unsigned int) * count);
-
-	//init
-	for(int i=0;i<count;i++)
-		*(h_array+i)=1;
-
-	checkCudaErrors(cudaMalloc(&d_array, sizeof(unsigned int) * count));
-	checkCudaErrors(cudaMalloc(&d_scan_result, sizeof(unsigned int) * count));
-
-	checkCudaErrors(cudaMemcpy(d_array, h_array, sizeof(unsigned int) * count, cudaMemcpyHostToDevice));
-    exclusive_scan < unsigned int , Add_Operator<unsigned int> > (d_array, d_scan_result, count, Add_Operator<unsigned int>());
-
-    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-
-    checkCudaErrors(cudaMemcpy(h_scan_result, d_scan_result, sizeof(unsigned int) * count, cudaMemcpyDeviceToHost));
-
-    //for(int i=0;i<count;i++)
-    //	std::cout<<*(h_scan_result+i)<<" ";
-    std::cout<<*(h_scan_result+count-1);
-    std::cout<<std::endl;
-
 
 }

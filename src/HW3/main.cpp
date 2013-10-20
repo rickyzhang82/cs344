@@ -106,8 +106,7 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMemcpy(h_luminance, d_luminance, numRows*numCols*sizeof(float), cudaMemcpyDeviceToHost));
 
   //check results and output the tone-mapped image
-  //TODO: uncomment it later
-  //postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
+  postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
   min_logLum = 0.f;
   max_logLum = 1.f;
 
@@ -121,18 +120,18 @@ int main(int argc, char **argv) {
   }
 
   std::cout<<"Ref min :"<<min_logLum<<" Ref max:"<<max_logLum<<std::endl;
-  //TOOD: uncomment it later
-  //referenceCalculation(h_luminance, h_cdf, numRows, numCols, numBins, min_logLum, max_logLum);
+  
+  referenceCalculation(h_luminance, h_cdf, numRows, numCols, numBins, min_logLum, max_logLum);
 
-  //checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
 
   //check results and output the tone-mapped image
 
-  //postProcess(reference_file, numRows, numCols, min_logLum, max_logLum);
+  postProcess(reference_file, numRows, numCols, min_logLum, max_logLum);
 
-  //cleanupGlobalMemory();
+  cleanupGlobalMemory();
 
-  //compareImages(reference_file, output_file, useEpsCheck, perPixelError, globalError);
+  compareImages(reference_file, output_file, useEpsCheck, perPixelError, globalError);
 
   return 0;
 }
