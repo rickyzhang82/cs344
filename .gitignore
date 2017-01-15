@@ -26,4 +26,4 @@ bin/*
 build/*
 
 #nishgt-build folder
-nsight-build/*
+cs344-project/*

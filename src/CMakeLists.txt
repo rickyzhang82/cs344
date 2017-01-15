@@ -13,10 +13,9 @@ find_package(CUDA REQUIRED)
 
 link_libraries(${OpenCV_LIBS} )
 
-#set (EXECUTABLE_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/bin/")
 get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR} PATH)
 
-set (EXECUTABLE_OUTPUT_PATH "${PARENT_DIR}/bin/")
+set (EXECUTABLE_OUTPUT_PATH "${PARENT_DIR}/cs344-project/bin")
 
 SET(CMAKE_C_COMPILER /opt/rh/devtoolset-3/root/bin/gcc)
 SET(CMAKE_CXX_COMPILER /opt/rh/devtoolset-3/root/bin/g++)
