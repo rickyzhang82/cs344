@@ -18,6 +18,10 @@ get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR} PATH)
 
 set (EXECUTABLE_OUTPUT_PATH "${PARENT_DIR}/bin/")
 
+SET(CMAKE_C_COMPILER /opt/rh/devtoolset-3/root/bin/gcc)
+SET(CMAKE_CXX_COMPILER /opt/rh/devtoolset-3/root/bin/g++)
+SET(CUDA_HOST_COMPILER ${CMAKE_C_COMPILER})
+
 if(CUDA_FOUND)
     # compared to class settings, we let NVidia's FindCUDA CMake detect 
     # whether to build x64.  We tell it to support most devices, though, 
