@@ -17,21 +17,25 @@ get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR} PATH)
 
 set (EXECUTABLE_OUTPUT_PATH "${PARENT_DIR}/cs344-project/bin")
 
-SET(CMAKE_C_COMPILER /opt/rh/devtoolset-3/root/bin/gcc)
-SET(CMAKE_CXX_COMPILER /opt/rh/devtoolset-3/root/bin/g++)
-SET(CUDA_HOST_COMPILER ${CMAKE_C_COMPILER})
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(NOT CMAKE_C_COMPILER_VERSION VERSION_LESS 5.4)
+        SET(CMAKE_C_COMPILER /opt/rh/devtoolset-3/root/bin/gcc)
+        SET(CMAKE_CXX_COMPILER /opt/rh/devtoolset-3/root/bin/g++)
+        SET(CUDA_HOST_COMPILER ${CMAKE_C_COMPILER})
+    endif()
+endif()
 
 if(CUDA_FOUND)
-    # compared to class settings, we let NVidia's FindCUDA CMake detect 
-    # whether to build x64.  We tell it to support most devices, though, 
-    # to make sure more people can easily run class code without knowing 
+    # compared to class settings, we let NVidia's FindCUDA CMake detect
+    # whether to build x64.  We tell it to support most devices, though,
+    # to make sure more people can easily run class code without knowing
     # about this compiler argument
     set(CUDA_NVCC_FLAGS "-gencode=arch=compute_61,code=sm_61;")
 
     # add -Wextra compiler flag for gcc compilations
     if (UNIX)
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wall;")
-	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")	
+	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -g")
     endif (UNIX)
 
